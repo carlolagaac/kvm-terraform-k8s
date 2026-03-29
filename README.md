@@ -21,14 +21,15 @@ Terraform + Ansible automation for spinning up a Kubernetes cluster on KVM/libvi
 ## Quick Start
 
 ```bash
-# 1. One-time setup
-./init_keys.sh          # Generate SSH keys
-./bridge0_setup.sh      # Configure bridge network
-./kvm_setup.sh          # Setup KVM (if needed)
-./create_diskpools.sh   # Create libvirt storage pools
+# 1. One-time setup (requires root/sudo)
+sudo ./bridge0_setup.sh      # Configure bridge network
+sudo ./kvm_setup.sh          # Setup KVM (if needed)
+sudo ./create_diskpools.sh   # Create libvirt storage pools
+./init_keys.sh               # Generate SSH keys
 
 # 2. Deploy everything (VMs + Kubernetes)
-./deploy.sh
+# Terraform needs root for libvirt access
+sudo ./deploy.sh
 ```
 
 After deployment, use the cluster:
@@ -72,5 +73,5 @@ Adjust `controlPlaneCount`, `workerCount`, `memoryMB`, `cpu` in `main.tf` or via
 ## Cleanup
 
 ```bash
-./cleanup_tf.sh
+sudo ./cleanup_tf.sh
 ```
