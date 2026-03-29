@@ -9,7 +9,7 @@
         timeout: 300
 
     - name: Wait for cloud-init to finish
-      ansible.builtin.command: cloud-init status --wait
+      ansible.builtin.shell: "cloud-init status --wait; [ \"$(cloud-init status)\" = 'status: done' ]"
       changed_when: false
 
     - name: Verify kubelet is installed
