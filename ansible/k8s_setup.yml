@@ -16,6 +16,30 @@
       ansible.builtin.command: kubelet --version
       changed_when: false
 
+- name: Fix containerd and prepare nodes
+  hosts: k8s
+  become: true
+  tasks:
+    - name: Ensure sandbox_image is set in containerd config
+      ansible.builtin.lineinfile:
+        path: /etc/containerd/config.toml
+        regexp: 'sandbox_image\s*='
+        line: '    sandbox_image = "registry.k8s.io/pause:3.10"'
+      notify: restart containerd
+
+    - name: Ensure SystemdCgroup is enabled
+      ansible.builtin.replace:
+        path: /etc/containerd/config.toml
+        regexp: 'SystemdCgroup = false'
+        replace: 'SystemdCgroup = true'
+      notify: restart containerd
+
+  handlers:
+    - name: restart containerd
+      ansible.builtin.systemd:
+        name: containerd
+        state: restarted
+
 - name: Initialize control plane
   hosts: control_plane
   become: true
@@ -25,13 +49,16 @@
         path: /etc/kubernetes/admin.conf
       register: kubeadm_init
 
+    - name: Reset failed kubeadm state if needed
+      ansible.builtin.command: kubeadm reset -f
+      when: not kubeadm_init.stat.exists
+
     - name: Run kubeadm init
       ansible.builtin.command: >
         kubeadm init
         --pod-network-cidr=10.244.0.0/16
         --apiserver-advertise-address={{ ansible_default_ipv4.address }}
       when: not kubeadm_init.stat.exists
-      register: init_output
 
     - name: Set up kubeconfig for fedora user
       when: not kubeadm_init.stat.exists
