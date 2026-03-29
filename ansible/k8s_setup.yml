@@ -59,19 +59,34 @@
   hosts: control_plane
   become: true
   tasks:
+    - name: Check if cluster is healthy
+      ansible.builtin.command: kubectl --kubeconfig=/etc/kubernetes/admin.conf cluster-info
+      register: cluster_health
+      changed_when: false
+      failed_when: false
+
+    - name: Reset if cluster is unhealthy
+      when: cluster_health.rc != 0
+      block:
+        - ansible.builtin.command: kubeadm reset -f
+        - ansible.builtin.file:
+            path: "{{ item }}"
+            state: absent
+          loop:
+            - /etc/kubernetes
+            - /var/lib/etcd
+            - /home/fedora/.kube
+
     - name: Check if already initialized
       ansible.builtin.stat:
         path: /etc/kubernetes/admin.conf
       register: kubeadm_init
 
-    - name: Reset failed kubeadm state if needed
-      ansible.builtin.command: kubeadm reset -f
-      when: not kubeadm_init.stat.exists
-
     - name: Restart kubelet before init
       ansible.builtin.systemd:
         name: kubelet
         state: restarted
+      when: not kubeadm_init.stat.exists
 
     - name: Run kubeadm init
       ansible.builtin.command: >
