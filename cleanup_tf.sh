@@ -19,6 +19,14 @@ echo "Removing network..."
 sudo virsh net-destroy kvmnet 2>/dev/null || true
 sudo virsh net-undefine kvmnet 2>/dev/null || true
 
+echo "Removing storage volumes..."
+for vol in $(sudo virsh vol-list default --details 2>/dev/null | awk 'NR>2 {print $1}' | grep -E 'commoninit|server_volume|os_image'); do
+  sudo virsh vol-delete "$vol" --pool default 2>/dev/null || true
+done
+for vol in $(sudo virsh vol-list vmdata --details 2>/dev/null | awk 'NR>2 {print $1}' | grep 'spare_volume'); do
+  sudo virsh vol-delete "$vol" --pool vmdata 2>/dev/null || true
+done
+
 echo "Cleaning Terraform state..."
 rm -rf .terraform* terraform*
 
