@@ -1,27 +1,28 @@
-# List all domains first to verify
-sudo virsh list --all
+#!/bin/bash
+# Cleanup all Terraform and Kubernetes resources
+set -euo pipefail
 
-# Shutdown the domains if they're running
-sudo virsh shutdown k3s-0
-sudo virsh shutdown k3s-1
-sudo virsh shutdown k3s-2
-sudo virsh shutdown k3s-3
+echo "Shutting down VMs..."
+for vm in $(sudo virsh list --name 2>/dev/null); do
+  sudo virsh shutdown "$vm" 2>/dev/null || true
+done
 
-# Wait a moment for shutdown, then undefine them
-sudo virsh undefine k3s-0
-sudo virsh undefine k3s-1
-sudo virsh undefine k3s-2
-sudo virsh undefine k3s-3
+sleep 5
 
-# If they're still running, you might need to use destroy (force shutdown)
-sudo virsh destroy k3s-0
-sudo virsh destroy k3s-1
-sudo virsh destroy k3s-2
-sudo virsh destroy k3s-3
+echo "Destroying and undefining VMs..."
+for vm in $(sudo virsh list --all --name 2>/dev/null); do
+  sudo virsh destroy "$vm" 2>/dev/null || true
+  sudo virsh undefine "$vm" 2>/dev/null || true
+done
 
-sudo virsh net-destroy kvmnet
-sudo virsh net-undefine kvmnet
+echo "Removing network..."
+sudo virsh net-destroy kvmnet 2>/dev/null || true
+sudo virsh net-undefine kvmnet 2>/dev/null || true
 
+echo "Cleaning Terraform state..."
+rm -rf .terraform* terraform*
 
-rm -rf .terraform*
-rm -rf terraform*
+echo "Cleaning generated files..."
+rm -f kube-config.yaml ansible/inventory.ini
+
+echo "✓ Cleanup complete"

@@ -48,6 +48,7 @@ terraform.rc
 # local env
 *.envrc
 *kube-config.yaml
+ansible/inventory.ini
 
 # Generated files
 builds

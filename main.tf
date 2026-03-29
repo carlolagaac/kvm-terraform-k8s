@@ -12,12 +12,17 @@ provider "libvirt" {
   uri = "qemu:///system"
 }
 
-variable "hostname" { default = "k3s-server" }
+variable "hostname" { default = "k8s-node" }
 variable "memoryMB" { default = 1024 * 4 }
 variable "cpu" { default = 2 }
-variable "serverCount" { default = 4 }
+variable "controlPlaneCount" { default = 1 }
+variable "workerCount" { default = 3 }
 variable "network" { default = "kvmnet" }
 variable "bridge" { default = "bridge0" }
+
+locals {
+  totalCount = var.controlPlaneCount + var.workerCount
+}
 
 resource "libvirt_volume" "os_image" {
   name   = "os_image"
@@ -28,26 +33,26 @@ resource "libvirt_volume" "os_image" {
 }
 
 resource "libvirt_volume" "server_volume" {
-  count          = var.serverCount
-  pool           = "default" #Use the default storage pool for vm
+  count          = local.totalCount
+  pool           = "default"
   name           = "server_volume-${count.index}"
   base_volume_id = libvirt_volume.os_image.id
   format         = "qcow2"
 }
 
 resource "libvirt_volume" "spare_volume" {
-  count  = var.serverCount
-  pool   = "vmdata" # Use data storage pool
+  count  = local.totalCount
+  pool   = "vmdata"
   name   = "spare_volume-${count.index}"
   format = "qcow2"
   size   = 107374182400
 }
 
 resource "libvirt_cloudinit_disk" "commoninit" {
-  count     = var.serverCount
+  count     = local.totalCount
   name      = "${var.hostname}-commoninit-${count.index}.iso"
   user_data = templatefile("${path.module}/cloud_init.cfg", {
-    hostname = "${var.hostname}-${count.index}"
+    hostname = count.index < var.controlPlaneCount ? "k8s-cp-${count.index}" : "k8s-worker-${count.index - var.controlPlaneCount}"
   })
 }
 
@@ -60,8 +65,8 @@ resource "libvirt_network" "network" {
 }
 
 resource "libvirt_domain" "domain" {
-  count      = var.serverCount
-  name       = "k3s-${count.index}"
+  count      = local.totalCount
+  name       = count.index < var.controlPlaneCount ? "k8s-cp-${count.index}" : "k8s-worker-${count.index - var.controlPlaneCount}"
   memory     = var.memoryMB
   vcpu       = var.cpu
   qemu_agent = true
@@ -106,6 +111,10 @@ resource "libvirt_domain" "domain" {
   cloudinit = libvirt_cloudinit_disk.commoninit[count.index].id
 }
 
-output "ips" {
-  value = [for domain in libvirt_domain.domain : domain.network_interface[0].addresses]
+output "control_plane_ips" {
+  value = [for i, domain in libvirt_domain.domain : domain.network_interface[0].addresses[0] if i < var.controlPlaneCount]
+}
+
+output "worker_ips" {
+  value = [for i, domain in libvirt_domain.domain : domain.network_interface[0].addresses[0] if i >= var.controlPlaneCount]
 }
